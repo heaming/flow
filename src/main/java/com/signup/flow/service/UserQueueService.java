@@ -16,7 +16,8 @@ import static com.signup.flow.exception.ErrorCode.QUEUE_ALREADY_REGISTERED_USER;
 @RequiredArgsConstructor
 public class UserQueueService {
     private final ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
-    private final String USER_QUEUE_WAIT_KEY = "user:queue:%s:wait";
+    private final String USER_QUEUE_WAIT_KEY = "users:queue:%s:wait";
+    private final String USER_QUEUE_PROCEED_KEY = "users:queue:%s:proceed";
 
     // 대기열 등록 API
     public Mono<Long> registerWaitQueue(final String queue, final Long userId) {
@@ -32,4 +33,42 @@ public class UserQueueService {
                 .flatMap(i -> reactiveRedisTemplate.opsForZSet().rank(USER_QUEUE_WAIT_KEY.formatted(queue), userId.toString()))
                 .map(i -> i >= 0 ? i+1 : i);
     }
+
+    // 진입 요청 API
+    // - 진입이 가능한 상태인지 조회
+    // - 진입 허용
+    /**
+     * @Title 진입 요청
+     * @param queue
+     * @param count 몇 개의 유저를 허용할 것인지 정의
+     * @return Long 몇 명이 허용되었는지
+     */
+    public Mono<Long> allowUser(final String queue, final Long count) {
+        // wait queue 사용자 제거
+        // proceed queue 사용자 추가
+        return reactiveRedisTemplate.opsForZSet()
+                .popMin(USER_QUEUE_WAIT_KEY.formatted(queue), count)
+                .flatMap(member -> reactiveRedisTemplate.opsForZSet()
+                        .add(USER_QUEUE_PROCEED_KEY.formatted(queue), member.getValue(), Instant.now().getEpochSecond()))
+                .count();
+    }
+
+    /**
+     * @Title 진입 가능 여부 확인
+     * @param queue
+     * @param userId
+     * @return Boolean
+     */
+    public Mono<Boolean> isAllowed(final String queue, final Long userId) {
+        return reactiveRedisTemplate.opsForZSet()
+                .rank(USER_QUEUE_PROCEED_KEY.formatted(queue), userId.toString())
+                .defaultIfEmpty(-1L)
+                .map(rank -> rank >= 0);
+    }
+
+
+
+
+
+
 }
