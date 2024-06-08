@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuples;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 
 import static com.signup.flow.exception.ErrorCode.QUEUE_ALREADY_REGISTERED_USER;
@@ -44,11 +47,8 @@ public class UserQueueService {
                 .map(i -> i >= 0 ? i+1 : i);
     }
 
-    // 진입 요청 API
-    // - 진입이 가능한 상태인지 조회
-    // - 진입 허용
     /**
-     * @apiNote  진입 요청
+     * @title 진입 요청
      * @param queue
      * @param count 몇 개의 유저를 허용할 것인지 정의
      * @return Long 몇 명이 허용되었는지
@@ -64,7 +64,7 @@ public class UserQueueService {
     }
 
     /**
-     * @apiNote 진입 가능 여부 확인
+     * @title 진입 가능 여부 확인
      * @param queue
      * @param userId
      * @return Boolean
@@ -77,7 +77,20 @@ public class UserQueueService {
     }
 
     /**
-     * @apiNote 대기열 순번 확인
+     * @title 진입 가능시 토큰 확인
+     * @param queue
+     * @param token
+     * @return Boolean
+     */
+    public Mono<Boolean> isAllowedByToken(final String queue, final Long userId, final String token) {
+        return this.generateToken(queue, userId)
+                .filter(gen -> gen.equalsIgnoreCase(token))
+                .map(i -> true)
+                .defaultIfEmpty(false);
+    }
+
+    /**
+     * @title 대기열 순번 확인
      * @param queue
      * @param userId
      * @return Long
@@ -89,9 +102,37 @@ public class UserQueueService {
                 .map(rank -> rank >= 0 ? rank+1: rank);
     }
 
+    /**
+     * @title cookie에 저장할 token 생성
+     * @param queue
+     * @param userId
+     * @return Mono<String> token
+     * @throws NoSuchAlgorithmException
+     */
+    public Mono<String> generateToken(final String queue, final long userId){
+        // sha256
+        MessageDigest digest = null;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+
+            var input = "user-queue-%s-%d".formatted(queue, userId);
+            byte[] encodedHash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
+
+            StringBuilder haxString = new StringBuilder();
+            for(byte aByte :encodedHash) {
+                haxString.append(String.format("%02x", aByte));
+            }
+
+            return Mono.just(haxString.toString());
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+
 
     /**
-     * @apiNote 대기자 허용 스케줄러
+     * @title 대기자 허용 스케줄러
      */
     @Scheduled(initialDelay = 5000, fixedDelay = 10000)
     public void scheduleAllowUser() {

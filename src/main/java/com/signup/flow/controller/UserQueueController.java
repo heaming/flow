@@ -6,8 +6,13 @@ import com.signup.flow.dto.RankNumberResponse;
 import com.signup.flow.dto.RegisterUserResponse;
 import com.signup.flow.service.UserQueueService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseCookie;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
+
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 
 @RestController
 @RequestMapping("/api/v1/queue")
@@ -47,4 +52,20 @@ public class UserQueueController {
                 .map(RankNumberResponse::new);
     }
 
+    @GetMapping("/touch")
+    Mono<String> touch(@RequestParam(name="queue", defaultValue = "default") String queue,
+                       @RequestParam(name="user_id") Long userId,
+                       ServerWebExchange exchange) {
+        return Mono.defer(() -> userQueueService.generateToken(queue, userId))
+                .map(token -> {
+                    exchange.getResponse().addCookie(
+                            ResponseCookie.from("user-queue-%s-token".formatted(queue), token)
+                                    .maxAge(Duration.ofSeconds(300))
+                                    .path("/")
+                                    .build()
+                    );
+
+                    return token;
+                });
+    }
 }
