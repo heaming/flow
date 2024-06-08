@@ -2,6 +2,7 @@ package com.signup.flow.controller;
 
 import com.signup.flow.dto.AllowUserResponse;
 import com.signup.flow.dto.AllowedUserResponse;
+import com.signup.flow.dto.RankNumberResponse;
 import com.signup.flow.dto.RegisterUserResponse;
 import com.signup.flow.service.UserQueueService;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,14 @@ public class UserQueueController {
 
         return userQueueService.isAllowed(queue, userId)
                 .map(AllowedUserResponse::new);
+    }
+
+    @GetMapping("/rank")
+    public Mono<RankNumberResponse> getRankUser(@RequestParam(name="queue", defaultValue = "default") String queue,
+                                                @RequestParam(name="user_id") Long userId) {
+
+        return userQueueService.getRank(queue, userId)
+                .map(RankNumberResponse::new);
     }
 
 }
